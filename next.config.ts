@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   // No Node image optimizer on shared hosting — serve images as static files.
   images: { unoptimized: true },
+  // Hostinger shared hosting has strict process/thread limits.
+  experimental: {
+    cpus: 1,
+    workerThreads: false,
+  },
 };
 
 export default nextConfig;
