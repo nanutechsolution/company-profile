@@ -6,17 +6,20 @@ Audit date: 2026-09-23
 
 **Status: READY for static export on Hostinger shared hosting.**
 
-- The app builds with `output: "export"`; the deployable artifact is the `out/` folder.
-- Upload `out/` to the domain's `public_html`. Do not upload `.next/` and do not run `npm start` on shared hosting.
+- The app builds with `output: "export"`; `npm run build:hostinger` copies the static export to the project root and removes `out/`, so Hostinger can serve the root directly.
+- Upload the generated root-level files to `public_html`; do not upload `.next/` and do not run `npm start` on shared hosting.
 - `next/image` is set to `unoptimized: true` so images serve as plain static files (no Node image optimizer).
-- `NEXT_PUBLIC_SITE_URL` is baked in at **build** time for static export — set it before running `npm run build`.
+- `NEXT_PUBLIC_SITE_URL` is baked in at **build** time for static export — set it before running `npm run build:hostinger`.
 - Locale middleware (server runtime) is not used on static hosting; the root `index.html` performs the `/` → `/id` redirect instead.
 - Localized meta tags still generate per-locale `<title>`/description/canonical/OG tags in the static HTML for `/id` and `/en`.
-- The contact form POSTs to `contact.php` and delivers inquiries to `contact@nanutechsolution.com` via Hostinger PHP mail.
-- `out/contact.php` must be uploaded to `public_html`; local static preview cannot execute PHP, so delivery must be tested on the deployed domain.
-- Hostinger PHP `mail()` must be enabled and the recipient mailbox must exist. Configure SPF, DKIM, and DMARC to reduce spam classification.
-- The static build now uses trailing-slash directories (`out/id/index.html`, `out/en/index.html`) for Apache/shared-hosting compatibility.
-- `/robots.txt` and `/sitemap.xml` are forced static routes and are generated into `out/`.
+- The contact form POSTs to `contact.php` and sends inquiries to `contact@nanutechsolution.com` via Hostinger PHP mail delivery.
+- `contact.php` must be uploaded to `public_html` alongside the static HTML files; static local preview cannot execute it.
+- Hostinger PHP `mail()` must be enabled and the recipient mailbox must exist. Configure SPF, DKIM, and DMARC for deliverability.
+- Run one real low-risk test inquiry after deployment and confirm receipt/reply behavior.
+- If PHP `mail()` is disabled, replace the endpoint with authenticated SMTP using credentials stored only on the host.
+- The static build now uses trailing-slash directories (`id/index.html`, `en/index.html`) for Apache/shared-hosting compatibility.
+- `/robots.txt` and `/sitemap.xml` are forced static routes and are generated into the root.
+- Verify after upload: `/`, `/id/`, `/en/`, `/icon.png`, `/images/logo-pt.png`, `/robots.txt`, `/sitemap.xml`, `/contact.php`, HTTPS, and no horizontal overflow.
 - Verify after upload: `/`, `/id`, `/en`, `/icon.png`, `/images/logo-pt.png`, `/robots.txt`, `/sitemap.xml`, `/contact.php`, HTTPS, and no horizontal overflow.
 
 ## B. Content readiness

@@ -37,10 +37,14 @@ jobs:
 
       - name: Guard against missing export or endpoint
         run: |
-          test -f out/index.html || { echo "out/index.html missing"; exit 1; }
-          test -f out/id/index.html || { echo "out/id/index.html missing"; exit 1; }
-          test -f out/en/index.html || { echo "out/en/index.html missing"; exit 1; }
-          test -f out/contact.php || { echo "out/contact.php missing"; exit 1; }
+          if [ -f out/index.html ] && [ -f out/id/index.html ] && [ -f out/en/index.html ] && [ -f out/contact.php ]; then
+            echo "Static export ready in out/"
+          elif [ -f index.html ] && [ -f id/index.html ] && [ -f en/index.html ] && [ -f contact.php ]; then
+            echo "Static export already copied to repository root."
+          else
+            echo "Neither out/ nor root export contains the required files."
+            exit 1
+          fi
           if [ -z "${NEXT_PUBLIC_SITE_URL}" ]; then
             echo "NEXT_PUBLIC_SITE_URL secret is not set; sitemap/robots/metadata would use the fallback domain."
             exit 1
@@ -87,12 +91,22 @@ jobs:
         run: |
           REMOTE_PATH="${SFTP_REMOTE_PATH:-/home/${SFTP_USER}/public_html}"
           echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_ENV"
+          if [ -d out ] && [ -f out/index.html ]; then
+            SOURCE_DIR=out
+          else
+            SOURCE_DIR=.
+          fi
+          echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
           {
             echo "cd $REMOTE_PATH"
-            # Upload overwrites the generated files and directories without deleting unrelated files.
             echo "pwd"
-            cd out
+            if [ "$SOURCE_DIR" = "out" ]; then
+              cd out
+            fi
             for entry in *; do
+              case "$entry" in
+                .git|.github|node_modules|.next|.env*|package*.json|tsconfig.json|next.config.ts|next-env.d.ts|README.md|PRODUCTION-CHECKLIST.md|.gitignore|eslint.config.mjs|scripts|src|images) continue ;;
+              esac
               if [ -d "$entry" ]; then
                 echo "put -r \"$entry\""
               else

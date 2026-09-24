@@ -33,10 +33,10 @@ This project is configured for a static export, which is the compatible option f
    npm ci
    npm run typecheck
    npm run lint
-   npm run build
+   npm run build:hostinger
    ```
 
-3. Upload the **contents of `out/`** (not the project folder and not `.next/`) to the domain's `public_html` directory. Confirm `out/contact.php` was uploaded too — it is required for the contact form.
+3. Upload the generated files to the domain's `public_html` directory. Confirm `contact.php` was uploaded too — it is required for the contact form.
 4. Enable HTTPS and verify `/`, `/id`, `/en`, `/robots.txt`, `/sitemap.xml`, `/icon.png`, `/images/logo-pt.png`, and `/contact.php`.
 5. Configure the domain's preferred HTTPS redirect in Hostinger if it is not already enabled.
 
@@ -53,7 +53,7 @@ Hostinger requirements:
 
 ## Auto-deploy to Hostinger (GitHub Actions)
 
-The repo includes `.github/workflows/deploy.yml`. On every push to `main`, GitHub Actions runs typecheck, lint, and the static build, then uploads `out/` to Hostinger over SFTP.
+The repo includes `.github/workflows/deploy.yml`. On every push to `main`, GitHub Actions runs typecheck, lint, and the static build, then uploads the generated site files directly to Hostinger `public_html` over SFTP.
 
 Configure these repository secrets at **GitHub → Settings → Secrets and variables → Actions**:
 
@@ -78,8 +78,8 @@ Notes:
 Manual alternative:
 
 ```bash
-npm ci && npm run typecheck && npm run lint && npm run build
-# then upload the contents of out/ to public_html
+npm ci && npm run typecheck && npm run lint && npm run build:hostinger
+# then upload the generated site files to public_html
 ```
 
 ## Owner-provided professional experience
