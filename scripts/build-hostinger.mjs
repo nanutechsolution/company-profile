@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 const root = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const nextBin = resolve(root, "node_modules", "next", "dist", "bin", "next");
 
-const buildArgs = [nextBin, "build", "--webpack"];
+const buildArgs = [nextBin, "build"];
 
 function runBuild() {
   return new Promise((resolveBuild, reject) => {
