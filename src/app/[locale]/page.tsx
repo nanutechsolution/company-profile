@@ -9,7 +9,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale: raw } = await params;
   if (!locales.includes(raw as Locale)) return {};
   const d = getDictionary(raw as Locale);
-  return { title: d.meta.title, description: d.meta.description, alternates: { canonical: `/${raw}`, languages: { id: "/id", en: "/en" } }, openGraph: { title: d.meta.title, description: d.meta.description, type: "website", url: `/${raw}`, siteName: "PT Nanu Tech Solution" }, twitter: { card: "summary" } };
+  return { title: d.meta.title, description: d.meta.description, alternates: { canonical: `/${raw}`, languages: { id: "/id", en: "/en" } }, openGraph: { title: d.meta.title, description: d.meta.description, type: "website", url: `/${raw}`, siteName: "PT Nanu Tech Solution", images: [{ url: "/images/logo-pt.png", width: 677, height: 369, alt: "PT Nanu Tech Solution" }] }, twitter: { card: "summary_large_image", images: ["/images/logo-pt.png"] } };
 }
 
 export default async function LocalePage({ params }: { params: Promise<{ locale: string }> }) {
