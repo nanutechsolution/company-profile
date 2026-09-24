@@ -51,6 +51,37 @@ Hostinger requirements:
 - If Hostinger disables `mail()`, switch the endpoint to an authenticated SMTP connection with credentials stored only on the host, never in this repository.
 - PHP cannot be executed by a local static preview — test delivery on the deployed domain.
 
+## Auto-deploy to Hostinger (GitHub Actions)
+
+The repo includes `.github/workflows/deploy.yml`. On every push to `main`, GitHub Actions runs typecheck, lint, and the static build, then uploads `out/` to Hostinger over SFTP.
+
+Configure these repository secrets at **GitHub → Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+| --- | --- |
+| `NEXT_PUBLIC_SITE_URL` | `https://nanutechsolution.com` |
+| `SFTP_HOST` | Your Hostinger SFTP host, e.g. `srv123.hostinger.com` (hPanel → Advanced → SSH Access) |
+| `SFTP_USER` | Your SFTP username, e.g. `u123456789` |
+| `SFTP_PASSWORD` | Your SFTP/hosting password |
+| `SFTP_PORT` | Optional, defaults to `22` |
+| `SFTP_REMOTE_PATH` | Optional, defaults to `/home/<SFTP_USER>/public_html` |
+| `SFTP_PRIVATE_KEY` | Optional alternative to `SFTP_PASSWORD`: a private key whose public half is added in hPanel → Advanced → SSH Access |
+
+Notes:
+
+- Deploy triggers on push to `main`. You can also run it manually from the **Actions** tab.
+- The workflow fails fast if a secret is missing, so a broken site is never uploaded.
+- It uses upload-and-overwrite, never deletes `public_html`, so any file you add on the host (`.htaccess`, other mail accounts) stays untouched.
+- The smoke test expects `GET /contact.php` to return `405` (method not allowed) and all page/asset routes to return `200`.
+- Hostinger's SFTP and SSH are available on Business/Cloud plans. The Single plan has no SSH/SFTP — use manual File Manager uploads instead.
+
+Manual alternative:
+
+```bash
+npm ci && npm run typecheck && npm run lint && npm run build
+# then upload the contents of out/ to public_html
+```
+
 ## Owner-provided professional experience
 
 The profile includes owner-provided experience framed as professional/founder experience:

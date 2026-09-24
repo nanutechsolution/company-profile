@@ -1,0 +1,144 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: hostinger-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate
+        run: |
+          npm run typecheck
+          npm run lint
+
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+        run: npm run build
+
+      - name: Guard against missing export or endpoint
+        run: |
+          test -f out/index.html || { echo "out/index.html missing"; exit 1; }
+          test -f out/id/index.html || { echo "out/id/index.html missing"; exit 1; }
+          test -f out/en/index.html || { echo "out/en/index.html missing"; exit 1; }
+          test -f out/contact.php || { echo "out/contact.php missing"; exit 1; }
+          if [ -z "${NEXT_PUBLIC_SITE_URL}" ]; then
+            echo "NEXT_PUBLIC_SITE_URL secret is not set; sitemap/robots/metadata would use the fallback domain."
+            exit 1
+          fi
+        env:
+          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+
+      - name: Check deployment secrets
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+        run: |
+          test -n "$SFTP_HOST" || { echo "Missing secret SFTP_HOST"; exit 1; }
+          test -n "$SFTP_USER" || { echo "Missing secret SFTP_USER"; exit 1; }
+          if [ -z "$SFTP_PASSWORD" ] && [ -z "$SFTP_PRIVATE_KEY" ]; then
+            echo "Set either SFTP_PASSWORD or SFTP_PRIVATE_KEY."
+            exit 1
+          fi
+
+      - name: Install sftp client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openssh-client
+          if [ -n "${{ secrets.SFTP_PASSWORD }}" ]; then
+            sudo apt-get install -y -qq sshpass
+          fi
+
+      - name: Prepare deployment key
+        env:
+          SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+        run: |
+          if [ -n "$SFTP_PRIVATE_KEY" ]; then
+            mkdir -p ~/.ssh
+            printf '%s\n' "$SFTP_PRIVATE_KEY" > ~/.ssh/id_deploy
+            chmod 600 ~/.ssh/id_deploy
+          fi
+
+      - name: Generate SFTP batch
+        env:
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_REMOTE_PATH: ${{ secrets.SFTP_REMOTE_PATH }}
+        run: |
+          REMOTE_PATH="${SFTP_REMOTE_PATH:-/home/${SFTP_USER}/public_html}"
+          echo "REMOTE_PATH=$REMOTE_PATH" >> "$GITHUB_ENV"
+          {
+            echo "cd $REMOTE_PATH"
+            # Upload overwrites the generated files and directories without deleting unrelated files.
+            echo "pwd"
+            cd out
+            for entry in *; do
+              if [ -d "$entry" ]; then
+                echo "put -r \"$entry\""
+              else
+                echo "put \"$entry\""
+              fi
+            done
+            echo "bye"
+          } > "$RUNNER_TEMP/sftp-batch"
+          echo "--- batch (paths only) ---"
+          grep -E '^(cd|rm|put)' "$RUNNER_TEMP/sftp-batch"
+
+      - name: Upload to Hostinger
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          PORT="${SFTP_PORT:-22}"
+          if [ -n "$SFTP_PASSWORD" ]; then
+            sshpass -p "$SFTP_PASSWORD" sftp \
+              -o StrictHostKeyChecking=accept-new \
+              -o PubkeyAuthentication=no \
+              -o PreferredAuthentications=password \
+              -p "$PORT" \
+              -b "$RUNNER_TEMP/sftp-batch" \
+              "$SFTP_USER@$SFTP_HOST"
+          else
+            sftp \
+              -o StrictHostKeyChecking=accept-new \
+              -i ~/.ssh/id_deploy \
+              -p "$PORT" \
+              -b "$RUNNER_TEMP/sftp-batch" \
+              "$SFTP_USER@$SFTP_HOST"
+          fi
+
+      - name: Smoke test live site
+        env:
+          SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+        run: |
+          test -n "$SITE_URL" || exit 0
+          for path in / /id/ /en/ /contact.php /robots.txt /sitemap.xml /images/logo-pt.png; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$SITE_URL$path")
+            echo "$path -> $code"
+            case "$path" in
+              /contact.php) [ "$code" = "405" ] || [ "$code" = "200" ] || { echo "contact.php not reachable"; exit 1; } ;;
+              *) [ "$code" = "200" ] || { echo "$path not OK"; exit 1; } ;;
+            esac
+          done
