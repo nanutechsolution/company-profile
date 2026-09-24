@@ -4,16 +4,20 @@ Audit date: 2026-09-23
 
 ## A. Technical readiness
 
-**Status: READY with one non-blocking framework warning.**
+**Status: READY for static export on Hostinger shared hosting.**
 
-- `/`, `/id`, and `/en` routes build successfully.
-- Locale-aware metadata, canonical URLs, hreflang alternates, sitemap, robots, and SVG favicon are present.
-- TypeScript, ESLint, and production build pass.
-- Responsive layout includes mobile navigation and mobile form layout.
-- Skip link, focus-visible states, form labels, required fields, consent checkbox, and mobile menu ARIA state are implemented.
-- `robots.txt`, `sitemap.xml`, and `icon.svg` return HTTP 200 without locale redirects after middleware exclusion.
-- No fake revenue, user counts, employee counts, awards, certifications, partnerships, branches, or security guarantees were found.
-- The current Next.js version reports a non-blocking warning that `middleware` will eventually be replaced by `proxy`.
+- The app builds with `output: "export"`; the deployable artifact is the `out/` folder.
+- Upload `out/` to the domain's `public_html`. Do not upload `.next/` and do not run `npm start` on shared hosting.
+- `next/image` is set to `unoptimized: true` so images serve as plain static files (no Node image optimizer).
+- `NEXT_PUBLIC_SITE_URL` is baked in at **build** time for static export — set it before running `npm run build`.
+- Locale middleware (server runtime) is not used on static hosting; the root `index.html` performs the `/` → `/id` redirect instead.
+- Localized meta tags still generate per-locale `<title>`/description/canonical/OG tags in the static HTML for `/id` and `/en`.
+- The contact form POSTs to `contact.php` and delivers inquiries to `contact@nanutechsolution.com` via Hostinger PHP mail.
+- `out/contact.php` must be uploaded to `public_html`; local static preview cannot execute PHP, so delivery must be tested on the deployed domain.
+- Hostinger PHP `mail()` must be enabled and the recipient mailbox must exist. Configure SPF, DKIM, and DMARC to reduce spam classification.
+- The static build now uses trailing-slash directories (`out/id/index.html`, `out/en/index.html`) for Apache/shared-hosting compatibility.
+- `/robots.txt` and `/sitemap.xml` are forced static routes and are generated into `out/`.
+- Verify after upload: `/`, `/id`, `/en`, `/icon.png`, `/images/logo-pt.png`, `/robots.txt`, `/sitemap.xml`, `/contact.php`, HTTPS, and no horizontal overflow.
 
 ## B. Content readiness
 
@@ -53,7 +57,7 @@ CONTACT_PHONE=
 CONTACT_FORM_ENDPOINT=
 ```
 
-Do not put API keys or private credentials in client-side variables. The current form is a local validation/acknowledgement flow and does not claim to deliver email.
+The recipient address is configured in `public/contact.php` as `$TO_EMAIL`, not in an environment variable — PHP does not read `.env` files. Do not store SMTP passwords or private credentials in this repository.
 
 ## E. Final steps before DNS/domain cutover
 
@@ -61,7 +65,7 @@ Do not put API keys or private credentials in client-side variables. The current
 2. Confirm legal/contact/social information and update the locale dictionaries.
 3. Decide and document the approved portfolio framing and permissions.
 4. Add approved privacy, terms, and data-processing copy.
-5. Configure a real server-side contact delivery provider if inquiry delivery is required; add rate limiting, spam protection, logging policy, and failure handling.
+5. Send one real low-risk test inquiry after deployment and confirm delivery to `contact@nanutechsolution.com`; check spam classification and SPF/DKIM/DMARC alignment.
 6. Run `npm run typecheck`, `npm run lint`, and `npm run build` in CI.
 7. Test `/id` and `/en` on current mobile and desktop browsers, including keyboard navigation, menu behavior, form validation, metadata, and no horizontal overflow.
 8. Verify deployed `robots.txt`, `sitemap.xml`, favicon, canonical/hreflang output, HTTPS, security headers, and domain redirects.

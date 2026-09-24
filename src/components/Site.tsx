@@ -16,12 +16,37 @@ export function Site({ locale, dictionary: d }: { locale: Locale; dictionary: Di
   const [systemState, setSystemState] = useState("PROCESS");
   const [scrolled, setScrolled] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const closeMenu = (restoreFocus = true) => {
+    if (restoreFocus && open) menuButtonRef.current?.focus();
+    setOpen(false);
+  };
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
   useEffect(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const onScroll = () => setScrolled(window.scrollY > 24);
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && open) { setOpen(false); menuButtonRef.current?.focus(); }
+      if (!open) return;
+      if (event.key === "Escape") closeMenu();
+      if (event.key === "Tab") {
+        // Keep focus inside the open menu panel.
+        const focusable = navRef.current?.querySelectorAll<HTMLElement>("a[href], button");
+        if (!focusable || focusable.length === 0) return;
+        const first = focusable[0]!;
+        const last = focusable[focusable.length - 1]!;
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
     };
+    const onPointerDown = (event: PointerEvent) => {
+      if (!open) return;
+      const target = event.target as Node;
+      const header = menuButtonRef.current?.closest("header");
+      if (header && !header.contains(target)) closeMenu(false);
+    };
+    const onResize = () => { if (open && window.innerWidth > 900) closeMenu(false); };
     const sections = ["main-content", "solutions", "industries", "experience", "security", "contact"].map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
     const rows = document.querySelectorAll<HTMLElement>(".capability-row");
     const observer = reduceMotion.matches ? null : new IntersectionObserver((entries) => {
@@ -38,12 +63,19 @@ export function Site({ locale, dictionary: d }: { locale: Locale; dictionary: Di
     rows.forEach((row) => observer?.observe(row));
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    document.addEventListener("pointerdown", onPointerDown);
     onScroll();
-    return () => { observer?.disconnect(); window.removeEventListener("scroll", onScroll); window.removeEventListener("keydown", onKeyDown); };
+    return () => { observer?.disconnect(); window.removeEventListener("scroll", onScroll); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize); document.removeEventListener("pointerdown", onPointerDown); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    if (!open) return;
+    const scrollbar = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbar > 0) document.body.style.paddingRight = `${scrollbar}px`;
+    navRef.current?.querySelector<HTMLElement>("a")?.focus();
+    return () => { document.body.style.overflow = ""; document.body.style.paddingRight = ""; };
   }, [open]);
   useEffect(() => {
     const targets = document.querySelectorAll<HTMLElement>("[data-magnetic]");
@@ -58,27 +90,28 @@ export function Site({ locale, dictionary: d }: { locale: Locale; dictionary: Di
     return () => cleanups.forEach((cleanup) => cleanup());
   }, []);
   const other = locale === "id" ? "en" : "id";
-  const nav = [["solutions", d.nav.solutions], ["industries", d.nav.industries], ["experience", d.nav.work], ["process", d.sections.process], ["about", d.nav.about]];
+  const nav = [["solutions", d.nav.solutions], ["industries", d.nav.industries], ["work", d.nav.work], ["process", d.sections.process], ["about", d.nav.about]];
   return <main>
     <a className="skip-link" href="#main-content">{d.ui.skip}</a>
     <header className={scrolled ? "nav is-scrolled" : "nav"}>
       <Link href={`/${locale}`} className="brand" aria-label="PT Nanu Tech Solution"><Image className="brand-logo" src="/images/logo-pt.png" alt="PT Nanu Tech Solution" width={150} height={82} priority /></Link>
-      <nav id="primary-navigation" aria-label={locale === "id" ? "Navigasi utama" : "Primary navigation"} className={open ? "nav-links open" : "nav-links"}>
-        {nav.map(([id, label]) => <a key={id} href={`#${id}`} onClick={() => setOpen(false)}>{label}</a>)}
-        <Link href={`/${other}`} className="lang">{locale === "id" ? "EN" : "ID"}</Link>
-        <a href="#contact" className="button small">{d.nav.cta}<ArrowRight size={15} aria-hidden="true" /></a>
+      {open && <button className="nav-backdrop" aria-label={d.ui.menuClose} onClick={() => closeMenu(false)} />}
+      <nav ref={navRef} id="primary-navigation" aria-label={locale === "id" ? "Navigasi utama" : "Primary navigation"} className={open ? "nav-links open" : "nav-links"}>
+        {nav.map(([id, label]) => <a key={id} href={`#${id}`} onClick={() => closeMenu(false)}>{label}</a>)}
+        <Link href={`/${other}`} className="lang" onClick={() => closeMenu(false)}>{locale === "id" ? "EN" : "ID"}</Link>
+        <a href="#contact" className="button small" onClick={() => closeMenu(false)}>{d.nav.cta}<ArrowRight size={15} aria-hidden="true" /></a>
       </nav>
-      <button ref={menuButtonRef} className="menu-button" aria-label={open ? d.ui.menuClose : d.ui.menuOpen} aria-expanded={open} aria-controls="primary-navigation" onClick={() => setOpen(!open)}>{open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}</button>
+      <button ref={menuButtonRef} className="menu-button" aria-label={open ? d.ui.menuClose : d.ui.menuOpen} aria-expanded={open} aria-controls="primary-navigation" onClick={() => (open ? closeMenu() : setOpen(true))}>{open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}</button>
     </header>
 
-    <section className="hero" id="main-content" aria-labelledby="hero-heading">
+    <section className="hero" id="main-content" tabIndex={-1} aria-labelledby="hero-heading">
       <div className="hero-copy"><p className="eyebrow">{d.hero.eyebrow}</p><h1 id="hero-heading">{d.hero.title}</h1><p className="lead">{d.hero.text}</p><div className="hero-actions"><a className="button magnetic-cta" href="#contact" data-magnetic>{d.hero.primary}<ArrowRight size={17} aria-hidden="true" /></a><a className="text-link" href="#solutions">{d.hero.secondary}<ChevronRight size={17} aria-hidden="true" /></a></div></div>
-      <div className="flow-visual" data-system-state={systemState} aria-labelledby="system-map-title"><div className="hero-logo-plate"><Image src="/images/logo-pt.png" alt="PT Nanu Tech Solution" width={677} height={369} priority /></div><div className="visual-heading"><span id="system-map-title">{d.ui.systemMap}</span><span className="live-dot">● {d.ui.connected} / {systemState}</span></div><p className="visual-description">{d.ui.systemMapDescription}</p><div className="flow-grid">{d.hero.flow.map((item, i) => <div className="flow-node" key={item}><span className="node-index">0{i + 1}</span><span>{item}</span>{i < d.hero.flow.length - 1 && <ArrowRight className="flow-arrow" size={16} aria-hidden="true" />}</div>)}</div><div className="visual-panel"><div className="panel-top"><span>OPERATING PICTURE / 01</span><span>PEOPLE → IMPACT</span></div><div className="bars" aria-hidden="true"><i /><i /><i /><i /><i /></div><div className="panel-lines" aria-hidden="true"><span /><span /><span /></div></div></div>
+      <div className="flow-visual" data-system-state={systemState} aria-labelledby="system-map-title"><div className="hero-logo-plate"><Image src="/images/logo-pt.png" alt="PT Nanu Tech Solution" width={677} height={369} priority /></div><div className="visual-heading"><span id="system-map-title">{d.ui.systemMap}</span><span className="live-dot">● {d.ui.connected} / {systemState}</span></div><p className="visual-description">{d.ui.systemMapDescription}</p><div className="flow-grid">{d.hero.flow.map((item, i) => <div className="flow-node" key={item}><span className="node-index">0{i + 1}</span><span>{item}</span>{i < d.hero.flow.length - 1 && <ArrowRight className="flow-arrow" size={16} aria-hidden="true" />}</div>)}</div><div className="visual-panel" aria-hidden="true"><div className="panel-top"><span>OPERATING PICTURE / 01</span><span>PEOPLE → IMPACT</span></div><div className="bars" aria-hidden="true"><i /><i /><i /><i /><i /></div><div className="panel-lines" aria-hidden="true"><span /><span /><span /></div></div></div>
     </section>
 
     <section className="statement-band" aria-label={d.sections.about}><p className="eyebrow gold">00 / {locale === "id" ? "TITIK BERANGKAT" : "STARTING POINT"}</p><p className="statement">{locale === "id" ? "Teknologi yang baik tidak dimulai dari fitur. Ia dimulai dari cara pekerjaan benar-benar dilakukan." : "Good technology does not start with features. It starts with how work actually gets done."}</p></section>
 
-    <section className="section" id="solutions"><SectionHead eyebrow="01" title={d.sections.solutions} text={locale === "id" ? "Dari perangkat lunak hingga infrastruktur, kami menyusun sistem di sekitar masalah operasional yang nyata." : "From software to infrastructure, we shape systems around real operational problems."} /><div className="capability-layout"><div className="capability-list">{d.solutions.map((item, i) => { const Icon = icons[i] ?? Cpu; return <article className={`capability-row ${activeCapability === i ? "is-active" : ""}`} data-index={i} key={item.title} onMouseEnter={() => setActiveCapability(i)}><span className="row-number">0{i + 1}</span><Icon size={22} aria-hidden="true" /><div><h3>{item.title}</h3><p>{item.text}</p></div><ArrowRight size={18} aria-hidden="true" /></article>; })}</div><div className="capability-signal" aria-hidden="true"><span className="signal-index">0{activeCapability + 1}</span><span className="signal-orbit orbit-one" /><span className="signal-orbit orbit-two" /><span className="signal-core" /><span className="signal-label">{d.solutions[activeCapability]?.title}</span></div></div></section>
+    <section className="section" id="solutions"><SectionHead eyebrow="01" title={d.sections.solutions} text={locale === "id" ? "Dari perangkat lunak hingga infrastruktur, kami menyusun sistem di sekitar masalah operasional yang nyata." : "From software to infrastructure, we shape systems around real operational problems."} /><div className="capability-layout"><div className="capability-list">{d.solutions.map((item, i) => { const Icon = icons[i] ?? Cpu; return <article className={`capability-row ${activeCapability === i ? "is-active" : ""}`} data-index={i} key={item.title} tabIndex={0} onMouseEnter={() => setActiveCapability(i)} onFocus={() => setActiveCapability(i)}><span className="row-number">0{i + 1}</span><Icon size={22} aria-hidden="true" /><div><h3>{item.title}</h3><p>{item.text}</p></div><ArrowRight size={18} aria-hidden="true" /></article>; })}</div><div className="capability-signal" aria-hidden="true"><span className="signal-index">0{activeCapability + 1}</span><span className="signal-orbit orbit-one" /><span className="signal-orbit orbit-two" /><span className="signal-core" /><span className="signal-label">{d.solutions[activeCapability]?.title}</span></div></div></section>
 
     <section className="section stack-section" aria-labelledby="stack-title"><div className="stack-intro"><p className="eyebrow">01A / {d.ui.capabilityIndex}</p><h2 id="stack-title">{d.ui.stackTitle}</h2><p>{d.ui.stackDescription}</p></div><div className="stack-ecosystem"><div className="ecosystem-path" aria-hidden="true"><span>APPLICATION</span><i>↓</i><span>API / DATA</span><i>↓</i><span>INFRASTRUCTURE</span></div><div className="stack-grid">{d.stack.map(group => <div className="stack-group" key={group.label}><span>{group.label}</span><p>{group.items.join(" · ")}</p></div>)}</div></div></section>
 
@@ -100,7 +133,7 @@ export function Site({ locale, dictionary: d }: { locale: Locale; dictionary: Di
 
     <section className="section principles" id="principles"><SectionHead eyebrow="10" title={d.sections.principles} /><div className="principle-grid">{d.principles.map((item, i) => <div key={item.title}><span>0{i + 1}</span><h3>{item.title}</h3><p>{item.text}</p></div>)}</div></section>
     <section className="final-scene cta-section"><p className="eyebrow gold">11 / {locale === "id" ? "LANGKAH BERIKUTNYA" : "NEXT STEP"}</p><h2>{locale === "id" ? "Sistem berikutnya dimulai dari pemahaman masalah yang lebih baik." : "Your next system starts with a better understanding of the problem."}</h2><p>{d.cta.text}</p><a className="button light magnetic-cta" href="#contact" data-magnetic>{locale === "id" ? "Mari membangunnya" : "Let's build it"}<ArrowRight size={17} aria-hidden="true" /></a></section>
-    <section className="contact section" id="contact" aria-labelledby="contact-heading"><div><p className="eyebrow">12 / {d.nav.contact.toUpperCase()}</p><h2 id="contact-heading">{d.sections.contact}</h2><p>{d.contact.text}</p><div className="contact-details"><div><span>Email</span><strong>{d.contact.email}</strong></div><div><span>WhatsApp</span><strong>{d.contact.phone}</strong></div><div><span>{locale === "id" ? "Lokasi" : "Location"}</span><strong>{d.contact.location}</strong></div><small>{d.contact.note}</small></div></div><ContactForm locale={locale} /></section>
+    <section className="contact section" id="contact" aria-labelledby="contact-heading"><div><p className="eyebrow">12 / {d.nav.contact.toUpperCase()}</p><h2 id="contact-heading">{d.sections.contact}</h2><p>{d.contact.text}</p><div className="contact-details"><div><span>Email</span><strong><a href={`mailto:${d.contact.email}`}>{d.contact.email}</a></strong></div><div><span>{locale === "id" ? "Lokasi" : "Location"}</span><strong>{d.contact.location}</strong></div><small>{d.contact.note}</small></div></div><ContactForm locale={locale} /></section>
     <footer><div className="brand footer-brand"><Image className="brand-logo" src="/images/logo-pt.png" alt="PT Nanu Tech Solution" width={130} height={71} /></div><div className="footer-groups"><div><span>{d.ui.footerSolutions}</span><p>{d.nav.solutions} · {d.nav.industries} · {d.nav.work}</p></div><div><span>{d.ui.footerConnect}</span><p>{d.nav.contact} · {d.contact.location}</p></div><div><span>{d.ui.footerSystem}</span><p>{d.ui.unavailable}</p></div></div><p>{d.footer}</p><span>© {new Date().getFullYear()} PT Nanu Tech Solution</span></footer>
   </main>;
 }
